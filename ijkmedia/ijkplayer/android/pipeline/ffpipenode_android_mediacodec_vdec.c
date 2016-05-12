@@ -465,7 +465,13 @@ static int feed_input_buffer(JNIEnv *env, IJKFF_Pipenode *node, int64_t timeUs, 
         } else {
             SDL_AMediaCodecFake_flushFakeFrames(opaque->acodec);
 
-            copy_size = SDL_AMediaCodec_writeInputData(opaque->acodec, input_buffer_index, d->pkt_temp.data, d->pkt_temp.size);
+            //modefy by yangweiqing, 20160511
+            if(q->abort_request){
+                ret = 0;
+                goto fail;
+            }else{
+                copy_size = SDL_AMediaCodec_writeInputData(opaque->acodec, input_buffer_index, d->pkt_temp.data, d->pkt_temp.size);
+            }
             if (!copy_size) {
                 ALOGE("%s: SDL_AMediaCodec_getInputBuffer failed\n", __func__);
                 ret = -1;
@@ -482,7 +488,14 @@ static int feed_input_buffer(JNIEnv *env, IJKFF_Pipenode *node, int64_t timeUs, 
             time_stamp = 0;
         }
         // ALOGE("queueInputBuffer, %lld\n", time_stamp);
-        amc_ret = SDL_AMediaCodec_queueInputBuffer(opaque->acodec, input_buffer_index, 0, copy_size, time_stamp, queue_flags);
+
+        //added by yangweiqing
+        if(q->abort_request){
+            ret = 0;
+            goto fail;
+        }else{
+            amc_ret = SDL_AMediaCodec_queueInputBuffer(opaque->acodec, input_buffer_index, 0, copy_size, time_stamp, queue_flags);
+        }      
         if (amc_ret != SDL_AMEDIA_OK) {
             ALOGE("%s: SDL_AMediaCodec_getInputBuffer failed\n", __func__);
             ret = -1;

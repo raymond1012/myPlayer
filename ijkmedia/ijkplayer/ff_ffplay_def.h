@@ -77,11 +77,11 @@
 #define BUFFERING_CHECK_PER_BYTES               (512)
 #define BUFFERING_CHECK_PER_MILLISECONDS        (500)
 
-#define MAX_QUEUE_SIZE (15 * 1024 * 1024)
+#define MAX_QUEUE_SIZE (5 * 1024 * 1024)//(15 * 1024 * 1024)
 #ifdef FFP_MERGE
 #define MIN_FRAMES 25
 #endif
-#define DEFAULT_MIN_FRAMES  50000
+#define DEFAULT_MIN_FRAMES  25//50000
 #define MIN_MIN_FRAMES      5
 #define MAX_MIN_FRAMES      50000
 #define MIN_FRAMES (ffp->dcc.min_frames)
@@ -189,6 +189,10 @@ typedef struct Frame {
 #endif
     int serial;
     double pts;           /* presentation timestamp for the frame */
+
+	//added by yangweiqing
+	 int64_t pak_pts;
+
     double duration;      /* estimated duration of the frame */
     int64_t pos;          /* byte position of the frame in the input file */
     SDL_VoutOverlay *bmp;
@@ -264,6 +268,10 @@ typedef struct VideoState {
     Clock audclk;
     Clock vidclk;
     Clock extclk;
+
+	//added by yangweiqing
+	bool audioSeekReq;
+	int64_t audio_ts;
 
     FrameQueue pictq;
 #ifdef FFP_MERGE

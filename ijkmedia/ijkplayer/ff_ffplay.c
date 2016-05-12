@@ -93,6 +93,8 @@
 #define FFP_IO_STAT_STEP (50 * 1024)
 
 #define FFP_BUF_MSG_PERIOD (3)
+//#define _Debug_
+
 
 // static const AVOption ffp_context_options[] = ...
 #include "ff_ffplay_options.h"
@@ -375,6 +377,9 @@ static int decoder_decode_frame(FFPlayer *ffp, Decoder *d, AVFrame *frame, AVSub
         if (d->queue->abort_request)
             return -1;
 
+        av_log(NULL, AV_LOG_ERROR, "decoder_decode_frame:: packet_pending=%ld,q_serial=%d, p_serial=%d, packats=%d, codec_type=%d\n", 
+					d->packet_pending, d->queue->serial, d->pkt_serial, d->queue->nb_packets,  d->avctx->codec_type);
+
         if (!d->packet_pending || d->queue->serial != d->pkt_serial) {
             AVPacket pkt;
             do {
@@ -649,13 +654,18 @@ static void video_image_display2(FFPlayer *ffp)
     Frame *vp;
 
     vp = frame_queue_peek(&is->pictq);
-    if (vp->bmp) {
-        SDL_VoutDisplayYUVOverlay(ffp->vout, vp->bmp);
-        ffp->stat.vfps = SDL_SpeedSamplerAdd(&ffp->vfps_sampler, FFP_SHOW_VFPS_FFPLAY, "vfps[ffplay]");
-        if (!ffp->first_video_frame_rendered) {
-            ffp->first_video_frame_rendered = 1;
-            ffp_notify_msg1(ffp, FFP_MSG_VIDEO_RENDERING_START);
-        }
+    int error = 0;
+    error = SDL_VoutDisplayYUVOverlay(ffp->vout, vp->bmp);
+    //{notify the payer if display error.  
+    if(error){
+        av_log(NULL, AV_LOG_ERROR, "notify the payer if display error\n");
+        ffp_notify_msg2(ffp, FFP_MSG_ERROR, error);
+    }//added by yangweiqing}       
+
+    ffp->stat.vfps = SDL_SpeedSamplerAdd(&ffp->vfps_sampler, FFP_SHOW_VFPS_FFPLAY, "vfps[ffplay]");
+    if (!ffp->first_video_frame_rendered) {
+        ffp->first_video_frame_rendered = 1;
+        ffp_notify_msg1(ffp, FFP_MSG_VIDEO_RENDERING_START);
     }
 }
 
@@ -1605,6 +1615,7 @@ static int audio_thread(void *arg)
     }
 
     do {
+			
         ffp_audio_statistic_l(ffp);
         if ((got_frame = decoder_decode_frame(ffp, &is->auddec, frame, NULL)) < 0)
             goto the_end;
@@ -1661,9 +1672,14 @@ static int audio_thread(void *arg)
                 af->serial = is->auddec.pkt_serial;
                 af->duration = av_q2d((AVRational){frame->nb_samples, frame->sample_rate});
 
+				  //added by yangweiqing			
+				  af->pak_pts = frame->pts;
+					
                 av_frame_move_ref(af->frame, frame);
                 frame_queue_push(&is->sampq);
-
+#ifdef _Debug_								
+        		  av_log(NULL, AV_LOG_INFO, "pak_pts=%lld, pts=%f, size=%d\n", af->pak_pts, af->pts, is->sampq.size);
+#endif
 #if CONFIG_AVFILTER
                 if (is->audioq.serial != is->auddec.pkt_serial)
                     break;
@@ -1899,6 +1915,7 @@ static int audio_decode_frame(FFPlayer *ffp)
     if (is->paused || is->step)
         return -1;
 
+
     if (ffp->sync_av_start &&                       /* sync enabled */
         is->video_st &&                             /* has video stream */
         !is->viddec.first_frame_decoded &&          /* not hot */
@@ -1926,6 +1943,11 @@ static int audio_decode_frame(FFPlayer *ffp)
             return -1;
         frame_queue_next(&is->sampq);
     } while (af->serial != is->audioq.serial);
+
+#ifdef _Debug_
+    ALOGD("yangweiqing::audio_decode_frame---pts=%f, pak_pts=%lld, size=%d\n",  af->pts, af->pak_pts, is->sampq.size);
+#endif
+	is->audio_ts = af->pak_pts;
 
     data_size = av_samples_get_buffer_size(NULL, av_frame_get_channels(af->frame),
                                            af->frame->nb_samples,
@@ -2003,6 +2025,7 @@ static int audio_decode_frame(FFPlayer *ffp)
     else
         is->audio_clock = NAN;
     is->audio_clock_serial = af->serial;
+		
 #ifdef FFP_SHOW_AUDIO_DELAY
     {
         static double last_clock;
@@ -2013,7 +2036,7 @@ static int audio_decode_frame(FFPlayer *ffp)
     }
 #endif
     if (!is->auddec.first_frame_decoded) {
-        ALOGD("avcodec/Audio: first frame decoded\n");
+        ALOGD("avcodec/Audio: first frame decoded---audio_clock=%f\n",  is->audio_clock);
         is->auddec.first_frame_decoded_time = SDL_GetTickHR();
         is->auddec.first_frame_decoded = 1;
     }
@@ -2289,6 +2312,18 @@ static int stream_component_open(FFPlayer *ffp, int stream_index)
         is->audio_diff_threshold = 2.0 * is->audio_hw_buf_size / is->audio_tgt.bytes_per_sec;
 
         is->audio_stream = stream_index;
+
+        //added by yangweiqing
+        if(is->audio_ts > 0){
+	             av_log(ffp, AV_LOG_ERROR, "yangweiqing::seek ---audio_stream=%d, audio_ts=%lld\n", is->audio_stream, is->audio_ts);
+                av_seek_frame(is->ic, is->audio_stream, is->audio_ts, 
+                    AVSEEK_FLAG_BACKWARD|AVSEEK_FLAG_AUDIOTRACK);
+                packet_queue_flush(&is->audioq);
+                packet_queue_put(&is->audioq, &flush_pkt);
+        }
+		
+		av_log(ffp, AV_LOG_ERROR, "select stream_index %d, audio_ts=%lld\n", stream_index, is->audio_ts);
+				
         is->audio_st = ic->streams[stream_index];
 
         decoder_init(&is->auddec, avctx, &is->audioq, is->continue_read_thread);
@@ -2648,6 +2683,7 @@ static int read_thread(void *arg)
             continue;
         }
 #endif
+
         if (is->seek_req) {
             int64_t seek_target = is->seek_pos;
             int64_t seek_min    = is->seek_rel > 0 ? seek_target - is->seek_rel + 2: INT64_MIN;
@@ -2738,6 +2774,10 @@ static int read_thread(void *arg)
                 ))) {
 #endif
             if (!is->eof) {
+#ifdef _Debug_
+                 av_log(ffp, AV_LOG_INFO, "audioq.size=%d, videoq.size=%d, max_buffer_size =%d\n", 
+								 	is->audioq.size, is->videoq.size, ffp->dcc.max_buffer_size);
+#endif
                 ffp_toggle_buffering(ffp, 0);
             }
             /* wait 10 ms */
@@ -2869,9 +2909,15 @@ static int read_thread(void *arg)
                 <= ((double)ffp->duration / 1000000);
         if (pkt->stream_index == is->audio_stream && pkt_in_play_range) {
             packet_queue_put(&is->audioq, pkt);
+//#ifdef _Debug_	
+             av_log(NULL, AV_LOG_ERROR, "yangweiqing::audio---pts=%lld, stream_index=%ld", pkt->pts, pkt->stream_index);
+//#endif
         } else if (pkt->stream_index == is->video_stream && pkt_in_play_range
                    && !(is->video_st && (is->video_st->disposition & AV_DISPOSITION_ATTACHED_PIC))) {
             packet_queue_put(&is->videoq, pkt);
+#ifdef _Debug_
+            av_log(NULL, AV_LOG_ERROR, "yangweiqing::video---pts=%lld, stream_index=%ld", pkt->pts, pkt->stream_index);			
+#endif
 #ifdef FFP_MERGE
         } else if (pkt->stream_index == is->subtitle_stream && pkt_in_play_range) {
             packet_queue_put(&is->subtitleq, pkt);
@@ -2955,6 +3001,10 @@ static VideoState *stream_open(FFPlayer *ffp, const char *filename, AVInputForma
     is->play_mutex = SDL_CreateMutex();
     ffp->is = is;
     is->pause_req = !ffp->start_on_prepared;
+
+	//added by yangweiqing
+	is->audioSeekReq = false;
+	is->audio_ts = 0;
 
     is->video_refresh_tid = SDL_CreateThreadEx(&is->_video_refresh_tid, video_refresh_thread, ffp, "ff_vout");
     if (!is->video_refresh_tid) {
@@ -3918,8 +3968,9 @@ int ffp_set_stream_selected(FFPlayer *ffp, int stream, int selected)
                     stream_component_close(ffp, is->video_stream);
                 break;
             case AVMEDIA_TYPE_AUDIO:
-                if (stream != is->audio_stream && is->audio_stream >= 0)
-                    stream_component_close(ffp, is->audio_stream);
+                if (stream != is->audio_stream && is->audio_stream >= 0){						
+						stream_component_close(ffp, is->audio_stream);
+					}
                 break;
             default:
                 av_log(ffp, AV_LOG_ERROR, "select invalid stream %d of video type %d\n", stream, avctx->codec_type);
