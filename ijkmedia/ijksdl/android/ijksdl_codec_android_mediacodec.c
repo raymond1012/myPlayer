@@ -27,6 +27,8 @@
 #include "ijksdl_codec_android_mediacodec_internal.h"
 
 static volatile int g_amediacodec_object_serial;
+//addded by yangweiqing
+extern bool FF_Release_Flag;
 
 typedef struct SDL_AMediaCodec_Common
 {
@@ -154,21 +156,37 @@ sdl_amedia_status_t SDL_AMediaCodec_flush(SDL_AMediaCodec* acodec)
     SDL_AMediaCodec_FakeFifo_flush(&acodec->common->fake_fifo);
     return acodec->func_flush(acodec);
 }
-
 ssize_t SDL_AMediaCodec_writeInputData(SDL_AMediaCodec* acodec, size_t idx, const uint8_t *data, size_t size)
 {
     assert(acodec->func_writeInputData);
+		
+    if (false == acodec->is_started) {
+	ALOGE("ywq--%s(): ref=%s\n", __func__, "media codec stop!!");
+	return 0;
+    }
+
     return acodec->func_writeInputData(acodec, idx, data, size);
 }
 
 ssize_t SDL_AMediaCodec_dequeueInputBuffer(SDL_AMediaCodec* acodec, int64_t timeoutUs)
 {
+    if (false == acodec->is_started) {
+	ALOGE("ywq--%s(): ref=%s\n", __func__, "media codec stop!!");
+	return 0;
+    }
+
+
     assert(acodec->func_dequeueInputBuffer);
     return acodec->func_dequeueInputBuffer(acodec, timeoutUs);
 }
 
 sdl_amedia_status_t SDL_AMediaCodec_queueInputBuffer(SDL_AMediaCodec* acodec, size_t idx, off_t offset, size_t size, uint64_t time, uint32_t flags)
 {
+    if (false == acodec->is_started) {
+	ALOGE("ywq--%s(): ref=%s\n", __func__, "media codec stop!!");
+	return 0;
+    }
+
     assert(acodec->func_queueInputBuffer);
     if (flags & AMEDIACODEC__BUFFER_FLAG_FAKE_FRAME) {
         return SDL_AMediaCodec_FakeFifo_queue(&acodec->common->fake_fifo, idx, offset, size, time, flags);
@@ -179,12 +197,23 @@ sdl_amedia_status_t SDL_AMediaCodec_queueInputBuffer(SDL_AMediaCodec* acodec, si
 
 ssize_t SDL_AMediaCodec_dequeueOutputBuffer(SDL_AMediaCodec* acodec, SDL_AMediaCodecBufferInfo *info, int64_t timeoutUs)
 {
+    if (false == acodec->is_started) {
+	ALOGE("ywq--%s(): ref=%s\n", __func__, "media codec stop!!");
+	return 0;
+    }
+
+
     assert(acodec->func_dequeueOutputBuffer);
     return acodec->func_dequeueOutputBuffer(acodec, info, timeoutUs);
 }
 
 SDL_AMediaFormat* SDL_AMediaCodec_getOutputFormat(SDL_AMediaCodec* acodec)
 {
+    if (false == acodec->is_started) {
+	ALOGE("ywq--%s(): ref=%s\n", __func__, "media codec stop!!");
+	return 0;
+    }
+
     assert(acodec->func_getOutputFormat);
     return acodec->func_getOutputFormat(acodec);
 }
@@ -272,11 +301,23 @@ void SDL_AMediaCodecFake_flushFakeFrames(SDL_AMediaCodec* acodec)
 
 sdl_amedia_status_t SDL_AMediaCodecFake_queueFakeFrame(SDL_AMediaCodec* acodec, size_t idx, off_t offset, size_t size, uint64_t time, uint32_t flags)
 {
+    if (false == acodec->is_started) {
+	ALOGE("ywq--%s(): ref=%s\n", __func__, "media codec stop!!");
+	return 0;
+    }
+
+
     return SDL_AMediaCodec_FakeFifo_queue(&acodec->common->fake_fifo, idx, offset, size, time, flags);
 }
 
 ssize_t SDL_AMediaCodecFake_dequeueOutputBuffer(SDL_AMediaCodec* acodec, SDL_AMediaCodecBufferInfo *info, int64_t timeoutUs)
 {    
+    if (false == acodec->is_started) {
+	ALOGE("ywq--%s(): ref=%s\n", __func__, "media codec stop!!");
+	return 0;
+    }
+
+
     if (SDL_AMediaCodec_FakeFifo_size(&acodec->common->fake_fifo) > 0) {
         ssize_t ret = SDL_AMediaCodec_FakeFifo_dequeue(&acodec->common->fake_fifo, info, 0);
         if (ret >= 0)
@@ -289,5 +330,10 @@ ssize_t SDL_AMediaCodecFake_dequeueOutputBuffer(SDL_AMediaCodec* acodec, SDL_AMe
 
 ssize_t SDL_AMediaCodecFake_dequeueFakeFrameOnly(SDL_AMediaCodec* acodec, SDL_AMediaCodecBufferInfo *info, int64_t timeoutUs)
 {
+    if (false == acodec->is_started) {
+	ALOGE("ywq--%s(): ref=%s\n", __func__, "media codec stop!!");
+	return 0;
+    }
+
     return SDL_AMediaCodec_FakeFifo_dequeue(&acodec->common->fake_fifo, info, 0);
 }

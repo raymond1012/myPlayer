@@ -768,6 +768,12 @@ fail:
 static int drain_output_buffer(JNIEnv *env, IJKFF_Pipenode *node, int64_t timeUs, int *dequeue_count, AVFrame *frame, int *got_frame)
 {
     IJKFF_Pipenode_Opaque *opaque = node->opaque;
+    FFPlayer              *ffp      = opaque->ffp;
+    VideoState            *is       = ffp->is;
+    Decoder               *d        = &is->viddec;
+    PacketQueue           *q        = d->queue;
+    int ret = 0;
+	
     SDL_LockMutex(opaque->acodec_mutex);
 
     if (opaque->acodec_flush_request || opaque->acodec_reconfigure_request) {
@@ -776,7 +782,11 @@ static int drain_output_buffer(JNIEnv *env, IJKFF_Pipenode *node, int64_t timeUs
         SDL_CondWaitTimeout(opaque->acodec_cond, opaque->acodec_mutex, 100);
     }
 
-    int ret = drain_output_buffer_l(env, node, timeUs, dequeue_count, frame, got_frame);
+    //modefy by yangweiqing
+    if(!q->abort_request){
+    	ret = drain_output_buffer_l(env, node, timeUs, dequeue_count, frame, got_frame);
+    }
+	
     SDL_UnlockMutex(opaque->acodec_mutex);
     return ret;
 }

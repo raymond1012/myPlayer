@@ -35,12 +35,13 @@
 static void *SDL_RunThread(void *data)
 {
     SDL_Thread *thread = data;
-    ALOGI("SDL_RunThread: [%d] %s\n", (int)gettid(), thread->name);
+    ALOGI("yqw--SDL_RunThread-Start:[%d] %s\n", (int)gettid(), thread->name);
     pthread_setname_np(pthread_self(), thread->name);
     thread->retval = thread->func(thread->data);
 #ifdef __ANDROID__
     SDL_JNI_DetachThreadEnv();
 #endif
+    ALOGI("ywq--SDL_RunThread-End: [%d] %s\n", (int)gettid(), thread->name);
     return NULL;
 }
 
@@ -89,7 +90,11 @@ void SDL_WaitThread(SDL_Thread *thread, int *status)
     if (!thread)
         return;
 
+    ALOGI("ywq--SDL_WaitThread-START	: [%d] %s\n", (int)gettid(), thread->name);
+
     pthread_join(thread->id, NULL);
+
+    ALOGI("ywq--SDL_WaitThread-End: [%d] %s\n", (int)gettid(), thread->name);
 
     if (status)
         *status = thread->retval;

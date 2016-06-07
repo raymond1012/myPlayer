@@ -377,8 +377,8 @@ static int decoder_decode_frame(FFPlayer *ffp, Decoder *d, AVFrame *frame, AVSub
         if (d->queue->abort_request)
             return -1;
 
-        av_log(NULL, AV_LOG_ERROR, "decoder_decode_frame:: packet_pending=%ld,q_serial=%d, p_serial=%d, packats=%d, codec_type=%d\n", 
-					d->packet_pending, d->queue->serial, d->pkt_serial, d->queue->nb_packets,  d->avctx->codec_type);
+//        av_log(NULL, AV_LOG_ERROR, "decoder_decode_frame:: packet_pending=%ld,q_serial=%d, p_serial=%d, packats=%d, codec_type=%d\n", 
+//					d->packet_pending, d->queue->serial, d->pkt_serial, d->queue->nb_packets,  d->avctx->codec_type);
 
         if (!d->packet_pending || d->queue->serial != d->pkt_serial) {
             AVPacket pkt;
@@ -647,7 +647,7 @@ static void free_picture(Frame *vp)
 
 // FFP_MERGE: calculate_display_rect
 // FFP_MERGE: video_image_display
-
+#define ERROR_DISPLAYER_ERROR	1001	//added by yangweiqing
 static void video_image_display2(FFPlayer *ffp)
 {
     VideoState *is = ffp->is;
@@ -659,7 +659,7 @@ static void video_image_display2(FFPlayer *ffp)
     //{notify the payer if display error.  
     if(error){
         av_log(NULL, AV_LOG_ERROR, "notify the payer if display error\n");
-        ffp_notify_msg2(ffp, FFP_MSG_ERROR, error);
+        ffp_notify_msg2(ffp, FFP_MSG_ERROR, ERROR_DISPLAYER_ERROR);
     }//added by yangweiqing}       
 
     ffp->stat.vfps = SDL_SpeedSamplerAdd(&ffp->vfps_sampler, FFP_SHOW_VFPS_FFPLAY, "vfps[ffplay]");
@@ -733,6 +733,7 @@ static void stream_close(FFPlayer *ffp)
     VideoState *is = ffp->is;
     /* XXX: use a special url_shutdown call to abort parse cleanly */
     is->abort_request = 1;
+		
     packet_queue_abort(&is->videoq);
     packet_queue_abort(&is->audioq);
     av_log(NULL, AV_LOG_DEBUG, "wait for read_tid\n");
@@ -773,6 +774,7 @@ static void stream_close(FFPlayer *ffp)
 #ifdef FFP_MERGE
     sws_freeContext(is->sub_convert_ctx);
 #endif
+
     av_free(is->filename);
     av_free(is);
 }
@@ -2909,9 +2911,9 @@ static int read_thread(void *arg)
                 <= ((double)ffp->duration / 1000000);
         if (pkt->stream_index == is->audio_stream && pkt_in_play_range) {
             packet_queue_put(&is->audioq, pkt);
-//#ifdef _Debug_	
+#ifdef _Debug_	
              av_log(NULL, AV_LOG_ERROR, "yangweiqing::audio---pts=%lld, stream_index=%ld", pkt->pts, pkt->stream_index);
-//#endif
+#endif
         } else if (pkt->stream_index == is->video_stream && pkt_in_play_range
                    && !(is->video_st && (is->video_st->disposition & AV_DISPOSITION_ATTACHED_PIC))) {
             packet_queue_put(&is->videoq, pkt);
@@ -3968,9 +3970,12 @@ int ffp_set_stream_selected(FFPlayer *ffp, int stream, int selected)
                     stream_component_close(ffp, is->video_stream);
                 break;
             case AVMEDIA_TYPE_AUDIO:
-                if (stream != is->audio_stream && is->audio_stream >= 0){						
-						stream_component_close(ffp, is->audio_stream);
-					}
+                if (stream != is->audio_stream && is->audio_stream >= 0)
+					stream_component_close(ffp, is->audio_stream);
+                else if(stream == is->audio_stream && is->audio_stream > 0){
+                    av_log(ffp, AV_LOG_DEBUG, "the same stream index %d\n", stream);
+                    return 0;
+                }
                 break;
             default:
                 av_log(ffp, AV_LOG_ERROR, "select invalid stream %d of video type %d\n", stream, avctx->codec_type);

@@ -219,7 +219,11 @@ static ssize_t SDL_AMediaCodecJava_writeInputData(SDL_AMediaCodec* acodec, size_
         void *buf_ptr  = (*env)->GetDirectBufferAddress(env, input_buffer);
 
         write_ret = size < buf_size ? size : buf_size;
-        memcpy(buf_ptr, data, write_ret);
+
+		 //modefy by yangweiqing
+		 if(data && buf_ptr && write_ret>0){
+	        memcpy(buf_ptr, data, write_ret);
+		 }		
     }
 
 fail:
