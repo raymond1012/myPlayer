@@ -3956,6 +3956,14 @@ int ffp_set_stream_selected(FFPlayer *ffp, int stream, int selected)
     if (!ic)
         return -1;
 
+    //added by yangweiqing
+    av_log(ffp, AV_LOG_DEBUG, "ffp_set_stream_selected---stream index= %d,stream number=%d\n", stream, ic->nb_streams);
+    av_log(ffp, AV_LOG_DEBUG, "ffp_set_stream_selected---audio_stream= %d,video_stream=%d\n", is->audio_stream, is->video_stream);
+
+    if(is->video_stream < 0){
+    	stream--;
+    }
+
     if (stream < 0 || stream >= ic->nb_streams) {
         av_log(ffp, AV_LOG_ERROR, "invalid stream index %d >= stream number (%d)\n", stream, ic->nb_streams);
         return -1;
@@ -3972,7 +3980,7 @@ int ffp_set_stream_selected(FFPlayer *ffp, int stream, int selected)
             case AVMEDIA_TYPE_AUDIO:
                 if (stream != is->audio_stream && is->audio_stream >= 0)
 					stream_component_close(ffp, is->audio_stream);
-                else if(stream == is->audio_stream && is->audio_stream > 0){
+                else if(stream == is->audio_stream && is->audio_stream >= 0){
                     av_log(ffp, AV_LOG_DEBUG, "the same stream index %d\n", stream);
                     return 0;
                 }
