@@ -518,11 +518,21 @@ static int feed_input_buffer(JNIEnv *env, IJKFF_Pipenode *node, int64_t timeUs, 
             if (d->pkt_temp.size <= 0)
                 d->packet_pending = 0;
         } else {
+        //added by yangweiqing,fix bug #2062
+#if 0        
             // FIXME: detect if decode finished
             // if (!got_frame) {
                 d->packet_pending = 0;
                 d->finished = d->pkt_serial;
             // }
+#else
+		if(d->packet_pending && d->finished != d->pkt_serial){
+			int inputIndex = SDL_AMediaCodec_dequeueInputBuffer(opaque->acodec, timeUs);
+			SDL_AMediaCodec_queueInputBuffer(opaque->acodec, inputIndex, 0, 0, 0, AMEDIACODEC__BUFFER_FLAG_END_OF_STREAM);
+			d->packet_pending = 0;
+			d->finished = d->pkt_serial;
+		}
+#endif            
         }
     }
 
