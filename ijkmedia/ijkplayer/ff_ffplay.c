@@ -3580,12 +3580,33 @@ long ffp_get_current_position_l(FFPlayer *ffp)
         start_diff = fftime_to_milliseconds(start_time);
 
     int64_t pos = 0;
+
+//modefied by yangweiqing, fix bug #2173
+#if 0
     double pos_clock = get_master_clock(is);
+
     if (isnan(pos_clock)) {
         pos = fftime_to_milliseconds(is->seek_pos);
     } else {
         pos = pos_clock * 1000;
     }
+#else
+	double pos_clock = 0;
+	for(int i=0; i <= 5; i++){
+		
+    		pos_clock = get_master_clock(is);
+		if (isnan(pos_clock)) {
+		       pos = fftime_to_milliseconds(is->seek_pos);
+			av_log(ffp, AV_LOG_DEBUG, "yangweiqing---sleep 10 ms and try again. i=%d\n", i);	
+			usleep(4*1000);
+		} else {
+			pos = pos_clock * 1000;
+			break;
+		}
+
+	}
+#endif
+
 
     // If using REAL time and not ajusted, then return the real pos as calculated from the stream
     // the use case for this is primarily when using a custom non-seekable data source that starts
