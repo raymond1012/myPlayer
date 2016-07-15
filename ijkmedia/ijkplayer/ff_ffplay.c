@@ -3592,18 +3592,20 @@ long ffp_get_current_position_l(FFPlayer *ffp)
     }
 #else
 	double pos_clock = 0;
-	for(int i=0; i <= 5; i++){
-		
-    		pos_clock = get_master_clock(is);
+	int i = 0;
+	for(; i <= 49; i++){
+    	pos_clock = get_master_clock(is);
 		if (isnan(pos_clock)) {
 		       pos = fftime_to_milliseconds(is->seek_pos);
-			av_log(ffp, AV_LOG_DEBUG, "yangweiqing---sleep 10 ms and try again. i=%d\n", i);	
-			usleep(4*1000);
+			av_log(ffp, AV_LOG_DEBUG, "lhplayer ---sleep 10 ms and try again. i=%d\n", i);	
+			usleep(10*1000);
 		} else {
 			pos = pos_clock * 1000;
 			break;
 		}
-
+	}
+	if (i > 49) {
+		av_log(ffp, AV_LOG_DEBUG, "lhplayer get_master_clock error will set is->seek_pos\n");
 	}
 #endif
 
